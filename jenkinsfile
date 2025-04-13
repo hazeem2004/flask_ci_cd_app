@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "my-app"
+        DOCKER_REGISTRY = "docker.io/yourdockerhub"
+        FULL_IMAGE = "${DOCKER_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Clone Code') {
+            steps {
+                git branch: 'main', url: 'https://github.com/yourusername/your-repo.git'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'echo "Run tests here (e.g., npm test or pytest)"'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    docker.build("${FULL_IMAGE}")
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry('', 'dockerhub-credentials') {
+                        docker.image("${FULL_IMAGE}").push()
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh 'docker run -d -p 5000:5000 --name running-app ${FULL_IMAGE}'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Build success!'
+            emailext subject: "✅ Build Success: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                     body: "Good job! The build was successful.",
+                     recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+        }
+        failure {
+            echo 'Build failed!'
+            emailext subject: "❌ Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                     body: "Please check the logs.",
+                     recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+        }
+    }
+}
